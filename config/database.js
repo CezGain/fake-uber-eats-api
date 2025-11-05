@@ -3,14 +3,15 @@ require('dotenv').config();
 
 const connectDB = async () => {
   try {
-    await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/ubereats', {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
-    });
-    console.log('MongoDB connected successfully');
+    await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/ubereats');
+    if (process.env.NODE_ENV !== 'test') {
+      console.log('MongoDB connected successfully');
+    }
   } catch (error) {
     console.error('MongoDB connection error:', error);
-    process.exit(1);
+    if (process.env.NODE_ENV !== 'test') {
+      process.exit(1);
+    }
   }
 };
 

@@ -1,0 +1,56 @@
+name: Deploy to Staging
+
+on:
+    push:
+        branches: [develop]
+
+env:
+    NODE_ENV: staging
+
+jobs:
+    deploy-staging:
+        name: Deploy to Staging Environment
+        runs-on: ubuntu-latest
+        environment:
+            name: staging
+
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v4
+
+            - name: Setup Node.js
+              uses: actions/setup-node@v4
+              with:
+                  node-version: "18"
+                  cache: "npm"
+
+            - name: Install dependencies
+              run: npm ci
+
+            - name: Run lint
+              run: npm run lint
+
+            - name: Run tests
+              run: npm test
+
+            - name: Build application
+              run: npm run build
+
+            - name: Deploy to staging server
+              run: |
+                  echo "Deploying to staging environment..."
+                  echo "Branch: ${{ github.ref_name }}"
+                  # Add your staging deployment script here
+
+            - name: Staging health check
+              run: |
+                  echo "Running staging health check..."
+                  # Add health check endpoint test
+                  echo "Staging deployment completed"
+
+            - name: Notify staging deployment
+              if: always()
+              run: |
+                  echo "::notice::Staging deployment completed"
+                  echo "Environment: staging"
+                  echo "Commit: ${{ github.sha }}"

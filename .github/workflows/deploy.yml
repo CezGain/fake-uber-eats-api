@@ -1,0 +1,141 @@
+name: Deploy to Production
+
+on:
+    push:
+        branches: [main]
+    workflow_dispatch:
+        inputs:
+            version:
+                description: "Version to deploy"
+                required: false
+                default: "latest"
+
+env:
+    NODE_ENV: production
+
+jobs:
+    validate:
+        name: Pre-deployment Validation
+        runs-on: ubuntu-latest
+
+        outputs:
+            should-deploy: ${{ steps.check.outputs.deploy }}
+
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v4
+
+            - name: Setup Node.js
+              uses: actions/setup-node@v4
+              with:
+                  node-version: "18"
+                  cache: "npm"
+
+            - name: Install dependencies
+              run: npm ci
+
+            - name: Validate lint
+              id: lint-check
+              run: npm run lint
+
+            - name: Validate build
+              id: build-check
+              run: npm run build
+
+            - name: Run tests
+              id: test-check
+              run: npm test
+
+            - name: Validation summary
+              id: check
+              run: |
+                  echo "All pre-deployment checks passed"
+                  echo "deploy=true" >> $GITHUB_OUTPUT
+
+    deploy:
+        name: Deploy to Production
+        runs-on: ubuntu-latest
+        needs: validate
+        if: needs.validate.outputs.should-deploy == 'true'
+        environment:
+            name: production
+            url: ${{ secrets.PROD_API_URL }}
+
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v4
+
+            - name: Setup Node.js
+              uses: actions/setup-node@v4
+              with:
+                  node-version: "18"
+                  cache: "npm"
+
+            - name: Install production dependencies
+              run: npm ci --only=production
+
+            - name: Build application
+              run: npm run build
+
+            - name: Run database migrations
+              run: |
+                  echo "Running MongoDB migrations..."
+                  echo "Migration version: $(date +%Y%m%d_%H%M%S)"
+                  # Add your migration commands here
+                  # node scripts/migrate.js
+
+            - name: Deploy to server
+              env:
+                  DEPLOY_KEY: ${{ secrets.DEPLOY_KEY }}
+                  PROD_API_URL: ${{ secrets.PROD_API_URL }}
+              run: |
+                  echo "Deploying to production server..."
+                  echo "Target: $PROD_API_URL"
+                  # Add your deployment script here
+                  # Example for Railway, Heroku, or custom server
+                  # railway up or heroku deploy or rsync/scp commands
+
+            - name: Health check
+              env:
+                  PROD_API_URL: ${{ secrets.PROD_API_URL }}
+              run: |
+                  echo "Performing health check..."
+                  # Uncomment when deployment is configured
+                  # for i in {1..5}; do
+                  #   if curl -f "$PROD_API_URL/health" > /dev/null 2>&1; then
+                  #     echo "Health check passed"
+                  #     exit 0
+                  #   fi
+                  #   echo "Attempt $i failed, retrying..."
+                  #   sleep 10
+                  # done
+                  # echo "Health check failed"
+                  # exit 1
+                  echo "Health check placeholder - configure after deployment setup"
+
+    notify:
+        name: Deployment Notification
+        runs-on: ubuntu-latest
+        needs: deploy
+        if: always()
+
+        steps:
+            - name: Notify success
+              if: needs.deploy.result == 'success'
+              run: |
+                  echo "::notice::Deployment to production succeeded!"
+                  echo "Branch: ${{ github.ref_name }}"
+                  echo "Commit: ${{ github.sha }}"
+                  echo "Deployed by: ${{ github.actor }}"
+                  # Add Slack/Email notification here
+                  # curl -X POST ${{ secrets.SLACK_WEBHOOK }} -d '{"text":"Deployment successful"}'
+
+            - name: Notify failure
+              if: needs.deploy.result == 'failure'
+              run: |
+                  echo "::error::Deployment to production failed!"
+                  echo "Branch: ${{ github.ref_name }}"
+                  echo "Commit: ${{ github.sha }}"
+                  echo "Attempted by: ${{ github.actor }}"
+                  echo "Check logs: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                  # Add Slack/Email notification here
